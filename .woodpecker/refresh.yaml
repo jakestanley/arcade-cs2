@@ -2,6 +2,8 @@ when:
   - event: cron
     cron: every-six-hours
     branch: main
+  - event: manual
+    branch: main
 
 steps:
   - name: refresh
