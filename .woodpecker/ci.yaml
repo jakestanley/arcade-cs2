@@ -38,4 +38,11 @@ steps:
       # -p targets containers by their compose project label, not by
       # which directory this runs from -- there is no stable directory
       # for this repo, every run is a fresh ephemeral clone.
-      - docker compose -p arcade-cs2 up -d
+      #
+      # Scoped to arcade-adapter only, not a bare `up -d` -- confirmed
+      # live that an unscoped `up -d` recreates every service in the
+      # project together whenever any one of them changes (rebuilding
+      # the adapter was enough to also recreate cs2, with no actual
+      # change to it, restarting an in-progress game for no reason).
+      # This workflow only ever changes the adapter; only touch that.
+      - docker compose -p arcade-cs2 up -d arcade-adapter

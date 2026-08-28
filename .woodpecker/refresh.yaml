@@ -22,10 +22,13 @@ steps:
     commands:
       # "Regular checks and pulls that there's a new image" -- for both
       # halves. pull fetches whatever's current for joedwards32/cs2:latest;
-      # --no-cache forces a fresh lib-arcade pull for the adapter. Either
-      # way, `up -d` only actually recreates a service if what it
-      # resolved differs from what's running -- no manual digest
-      # comparison needed, Compose already does that check.
+      # --no-cache forces a fresh lib-arcade pull for the adapter. Each
+      # `up -d <service>` is scoped individually and run separately --
+      # confirmed live that a single unscoped `up -d` recreates every
+      # service in the project together whenever any one of them
+      # changes, which would restart a live game for no reason on every
+      # adapter rebuild even when cs2 itself never changed.
       - docker compose -p arcade-cs2 pull cs2
+      - docker compose -p arcade-cs2 up -d cs2
       - docker compose -p arcade-cs2 build --no-cache arcade-adapter
-      - docker compose -p arcade-cs2 up -d
+      - docker compose -p arcade-cs2 up -d arcade-adapter
