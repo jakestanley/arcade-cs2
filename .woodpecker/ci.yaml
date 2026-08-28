@@ -1,0 +1,30 @@
+when:
+  - event: push
+    branch: main
+
+steps:
+  - name: deploy
+    image: docker:27-cli
+    volumes:
+      # Docker-outside-of-docker: this repo must be marked "trusted" in
+      # Woodpecker for this volume mount to actually be honored
+      # (homelab-ci/scripts/add-repo.sh sets this during activation).
+      # Verified this session that build + deploy both work correctly
+      # this way -- no special agent needed, this is the standard
+      # Docker-backed agent every other pipeline here already uses.
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      SRCDS_TOKEN:
+        from_secret: arcade_cs2_srcds_token
+      CS2_RCONPW:
+        from_secret: arcade_cs2_rcon_password
+    commands:
+      # CACHEBUST forces a fresh `pip install` of lib-arcade on every
+      # push, not just local code changes to this repo -- requirements.txt
+      # pins @main, so its own content never changes to naturally
+      # invalidate Docker's build cache.
+      - CACHEBUST=$(date +%s) docker compose -p arcade-cs2 build arcade-adapter
+      # -p targets containers by their compose project label, not by
+      # which directory this runs from -- there is no stable directory
+      # for this repo, every run is a fresh ephemeral clone.
+      - docker compose -p arcade-cs2 up -d

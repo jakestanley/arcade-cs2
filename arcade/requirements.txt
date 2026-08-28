@@ -1,0 +1,1 @@
+lib-arcade @ git+https://github.com/jakestanley/lib-arcade.git@main

@@ -1,0 +1,76 @@
+services:
+  cs2:
+    image: joedwards32/cs2:latest
+    restart: unless-stopped
+    environment:
+      SRCDS_TOKEN: "${SRCDS_TOKEN:?set as a Woodpecker secret -- Steam GSLT for App ID 730, see README.md}"
+      CS2_RCONPW: "${CS2_RCONPW:?set as a Woodpecker secret}"
+      CS2_SERVERNAME: "Jake's CS2 Wingman Server"
+      CS2_PW: ""
+      CS2_PORT: "27015"
+      CS2_GAMETYPE: "0"
+      CS2_GAMEMODE: "2"
+      CS2_MAPGROUP: "mg_wingman"
+      CS2_STARTMAP: "de_shortnuke"
+      CS2_MAXPLAYERS: "4"
+      CS2_BOT_DIFFICULTY: "1"
+      CS2_BOT_QUOTA: "4"
+      CS2_BOT_QUOTA_MODE: "fill"
+      # SourceTV -- image template uses TV_* not CS2_TV_*
+      TV_ENABLE: "0"
+      TV_PORT: "27020"
+    ports:
+      - "27015:27015/tcp"
+      - "27015:27015/udp"
+    volumes:
+      # Named volume, not a bind mount: this repo has no persistent
+      # checkout on the host (deployed entirely by CI, every run from a
+      # fresh ephemeral clone), so state has to be owned by the Docker
+      # daemon itself, not tied to any particular directory. Also avoids
+      # re-running SteamCMD's full game-file download on every redeploy.
+      - cs2_data:/home/steam/cs2-dedicated
+    shm_size: 256mb
+    ulimits:
+      nofile:
+        soft: 1000000
+        hard: 1000000
+    # V8 (used by CS2's scripting layer) needs syscalls blocked by Docker's
+    # default seccomp profile -- without this the server hangs on startup.
+    security_opt:
+      - seccomp:unconfined
+
+  arcade-adapter:
+    build:
+      context: ./arcade
+      # Bust the pip-install layer to actually pick up new lib-arcade
+      # commits -- requirements.txt pins @main, so its content (and
+      # therefore Docker's cache key) never changes on its own.
+      args:
+        CACHEBUST: "${CACHEBUST:-1}"
+    restart: unless-stopped
+    # Required for UPnP router discovery (SSDP multicast) -- doesn't
+    # reliably work across Docker's default bridge network. Means the
+    # adapter binds ARCADE_ADAPTER_PORT directly on the host's network
+    # stack, not through a published port mapping.
+    network_mode: host
+    environment:
+      ARCADE_SERVER_ID: "arcade-cs2"
+      ARCADE_SERVER_NAME: "CS2"
+      ARCADE_SERVER_DESCRIPTION: "CS2 dedicated server (arcade-cs2)"
+      ARCADE_BASE_URL: "https://arcade.stanley.arpa"
+      ARCADE_ADAPTER_PORT: "8302"
+      ARCADE_ADAPTER_BASE_URL: "http://adler.stanley.arpa:8302"
+      ARCADE_HEARTBEAT_SECONDS: "30"
+      ARCADE_COMPOSE_PROJECT: "arcade-cs2"
+      ARCADE_COMPOSE_SERVICE: "cs2"
+      ARCADE_STOP_TIMEOUT_SECONDS: "30"
+      ARCADE_UPNP_ENABLED: "true"
+      # CS2 needs both protocols forwarded on the same port.
+      ARCADE_FORWARD_PROTOCOL: "udp,tcp"
+      SERVER_PORT: "27015"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /etc/homelab/certs/ca/ca.crt:/etc/ssl/certs/homelab-ca.crt:ro
+
+volumes:
+  cs2_data:
