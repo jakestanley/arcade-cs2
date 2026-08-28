@@ -4,6 +4,15 @@ when:
   - event: manual
     branch: main
 
+# Pin to the Docker-backed agent explicitly. Without this, an unlabeled
+# workflow can match ANY agent -- including the native `local`-backend
+# agent, which doesn't understand Docker image: values at all and fails
+# immediately trying to exec them as literal binaries. Confirmed via a
+# real failure, not anticipated -- same bug already found once this
+# session for homelab-infra/validate.yaml.
+labels:
+  backend: docker
+
 steps:
   - name: deploy
     image: docker:27-cli

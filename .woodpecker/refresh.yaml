@@ -5,6 +5,10 @@ when:
   - event: manual
     branch: main
 
+# Pin to the Docker-backed agent -- see ci.yaml for why this matters.
+labels:
+  backend: docker
+
 steps:
   - name: refresh
     image: docker:27-cli
