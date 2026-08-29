@@ -19,6 +19,9 @@ services:
       # SourceTV -- image template uses TV_* not CS2_TV_*
       TV_ENABLE: "0"
       TV_PORT: "27020"
+      # Verbose startup diagnostics while chasing the post-libv8system.so
+      # silent hang -- 0=none, 1=steamcmd, 2=cs2, 3=all.
+      DEBUG: "3"
     ports:
       - "27015:27015/tcp"
       - "27015:27015/udp"
@@ -36,8 +39,13 @@ services:
         hard: 1000000
     # V8 (used by CS2's scripting layer) needs syscalls blocked by Docker's
     # default seccomp profile -- without this the server hangs on startup.
+    # AppArmor's docker-default profile is a separate confinement layer
+    # that seccomp:unconfined does NOT disable -- it can still block the
+    # ptrace/executable-memory operations V8's JIT needs, causing the same
+    # class of silent hang (no crash, no log output, port never opens).
     security_opt:
       - seccomp:unconfined
+      - apparmor:unconfined
 
   arcade-adapter:
     build:
