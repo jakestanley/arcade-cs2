@@ -46,6 +46,12 @@ services:
     security_opt:
       - seccomp:unconfined
       - apparmor:unconfined
+    # SYS_PTRACE is a third, independent confinement layer (Linux
+    # capabilities) that neither seccomp:unconfined nor apparmor:unconfined
+    # touches -- it's absent from Docker's default capability set, and
+    # V8's JIT does ptrace-based self-inspection for its sandboxing.
+    cap_add:
+      - SYS_PTRACE
 
   arcade-adapter:
     build:
