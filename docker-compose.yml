@@ -1,6 +1,13 @@
 services:
   cs2:
-    image: joedwards32/cs2:latest
+    build:
+      # Thin custom layer over the upstream image -- see cs2/Dockerfile
+      # for why (fixes libv8.so resolution once cap_sys_ptrace=eip is
+      # set on the binary). refresh.yaml passes --pull on the build so
+      # this still picks up new upstream joedwards32/cs2:latest images,
+      # since a plain `docker compose build` won't re-pull a cached
+      # `:latest` FROM tag on its own.
+      context: ./cs2
     restart: unless-stopped
     environment:
       SRCDS_TOKEN: "${SRCDS_TOKEN:?set as a Woodpecker secret -- Steam GSLT for App ID 730, see README.md}"
