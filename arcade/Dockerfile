@@ -17,6 +17,6 @@ COPY requirements.txt .
 # reuse the very first pip install forever.
 ARG CACHEBUST=1
 RUN pip install --no-cache-dir -r requirements.txt
-COPY adapter.py .
+COPY adapter.py rcon.py .
 
 CMD ["python3", "adapter.py"]

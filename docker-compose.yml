@@ -74,6 +74,9 @@ services:
       # CS2 needs both protocols forwarded on the same port.
       ARCADE_FORWARD_PROTOCOL: "udp,tcp"
       SERVER_PORT: "27015"
+      # For the restart_round action's RCON connection -- same secret the
+      # cs2 service itself uses.
+      CS2_RCONPW: "${CS2_RCONPW:?set as a Woodpecker secret}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /etc/homelab/certs/ca/ca.crt:/etc/ssl/certs/homelab-ca.crt:ro
