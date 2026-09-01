@@ -16,11 +16,12 @@ services:
       # RCON-changelevel'ing) into a nonexistent map hangs the engine
       # permanently instead of erroring cleanly, which is what looked
       # like a Wingman-specific bug for most of this investigation.
-      # Verified live, twice: cold boot AND a live RCON switch into
-      # Wingman both work fine once the map is real -- this isn't a
-      # mapgroup-based launch (CS2_MAPGROUP is the CS:GO-era mechanism
-      # and doesn't appear to matter here), just GAMEMODE + a real map.
-      CS2_STARTMAP: "de_dust2"
+      # de_nuke is the real map this was probably meant to be -- Wingman
+      # may confine play to a compact area of it rather than needing a
+      # literal separate "shortnuke" map file. Boots cleanly (verified
+      # live), but whether the in-game layout is actually the intended
+      # short/wingman-style area needs a real playtest to confirm.
+      CS2_STARTMAP: "de_nuke"
       CS2_MAXPLAYERS: "4"
       CS2_BOT_DIFFICULTY: "1"
       CS2_BOT_QUOTA: "4"
