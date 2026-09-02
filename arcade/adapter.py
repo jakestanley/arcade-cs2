@@ -59,21 +59,14 @@ ECONOMY_PRESETS = {
     },
 }
 
-# Bomb-defusal modes only (game_type 0) -- name -> (game_type, game_mode).
-# Arms Race/Demolition/Deathmatch (game_type 1) use an entirely different
-# map pool and aren't in scope for change_map yet.
-DEFUSAL_MODES = {
-    "casual": (0, 0),
-    "competitive": (0, 1),
-    "wingman": (0, 2),
-}
-
-# Installed maps confirmed live via `maps *` that are actual bomb-defusal
-# maps -- excludes vanity/night reskins, prefabs, UI scenes, and other
-# game types' maps (ar_*, cs_italy/cs_office are hostage maps), all of
-# which also show up in that raw listing but aren't safe changelevel
-# targets for this mode family.
-DEFUSAL_MAPS = [
+# Installed maps confirmed live via `maps *`, split by which mode family
+# they're built for -- excludes vanity/night reskins, prefabs, UI scenes,
+# and cs_italy/cs_office (hostage maps, a third pool not wired up yet).
+# A defusal map has no arms-race weapon-progression spawns and vice versa;
+# mixing them isn't a crash (learned live: an unsupported map/mode pairing
+# just gives wrong spawns/rules), but it's still wrong, so change_map
+# validates map against whichever mode applies.
+_DEFUSAL_MAPS = [
     "de_ancient",
     "de_anubis",
     "de_boulder",
@@ -89,6 +82,19 @@ DEFUSAL_MAPS = [
     "de_train",
     "de_vertigo",
 ]
+_ARMS_RACE_MAPS = ["ar_baggage", "ar_pool_day", "ar_shoots"]
+
+# name -> (game_type, game_mode, compatible maps). "arms_race" is CS2's
+# official name for what's colloquially "Gun Game" (game_type 1, game_mode
+# 0). Demolition/Deathmatch (game_type 1, game_mode 1/2) share arms_race's
+# map pool convention-wise but aren't wired up as switchable modes yet.
+MODES = {
+    "casual": (0, 0, _DEFUSAL_MAPS),
+    "competitive": (0, 1, _DEFUSAL_MAPS),
+    "wingman": (0, 2, _DEFUSAL_MAPS),
+    "arms_race": (1, 0, _ARMS_RACE_MAPS),
+}
+ALL_MAPS = sorted({map_name for *_, maps in MODES.values() for map_name in maps})
 
 # CS2's `status` output has no `map:` line at all (unlike CS:GO/CS:S) --
 # confirmed live. The only place the current map name shows up is the
@@ -192,14 +198,37 @@ def apply_preset(body: dict) -> tuple[bool, str]:
     return True, f"applied {preset}"
 
 
+def _current_mode() -> str | None:
+    """Best-effort reverse lookup of the running mode's name in MODES,
+    from the live game_type/game_mode cvars. None if unreadable or if the
+    server's current mode isn't one change_map knows how to switch to
+    (e.g. Deathmatch)."""
+    game_type, game_mode = _query_cvar("game_type"), _query_cvar("game_mode")
+    if game_type is None or game_mode is None:
+        return None
+    current = (int(game_type), int(game_mode))
+    for name, (gt, gm, _maps) in MODES.items():
+        if (gt, gm) == current:
+            return name
+    return None
+
+
 def change_map(body: dict) -> tuple[bool, str]:
     target_map = body.get("map")
-    if target_map not in DEFUSAL_MAPS:
+    if target_map not in ALL_MAPS:
         return False, f"unknown map: {target_map}"
 
     mode = body.get("mode") or None
-    if mode is not None and mode not in DEFUSAL_MODES:
+    if mode is not None and mode not in MODES:
         return False, f"unknown mode: {mode}"
+
+    # Validate target_map against whichever mode will actually be running:
+    # the one being switched to, or (if unspecified) whatever's live now.
+    # Skips validation if the current mode can't be determined -- permissive
+    # on failure, since a wrong pairing gives wrong spawns, not a crash.
+    effective_mode = mode if mode is not None else _current_mode()
+    if effective_mode is not None and target_map not in MODES[effective_mode][2]:
+        return False, f"{target_map} isn't a {effective_mode} map"
 
     try:
         if mode is not None:
@@ -207,7 +236,7 @@ def change_map(body: dict) -> tuple[bool, str]:
             # applies the matching gamemode_*.cfg at map-load time, not
             # immediately on a bare cvar change with the map already
             # running.
-            game_type, game_mode = DEFUSAL_MODES[mode]
+            game_type, game_mode, _maps = MODES[mode]
             rcon.exec_command(
                 "127.0.0.1", config.forward_port, RCON_PASSWORD, f"game_type {game_type}"
             )
@@ -251,14 +280,14 @@ if __name__ == "__main__":
                         "name": "map",
                         "type": "enum",
                         "label": "Map",
-                        "options": DEFUSAL_MAPS,
+                        "options": ALL_MAPS,
                         "default": "de_nuke",
                     },
                     {
                         "name": "mode",
                         "type": "enum",
                         "label": "Mode (leave unset to keep current)",
-                        "options": list(DEFUSAL_MODES),
+                        "options": list(MODES),
                     },
                 ],
             },
