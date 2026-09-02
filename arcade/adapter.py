@@ -59,7 +59,11 @@ ECONOMY_PRESETS = {
     },
 }
 
-_MAP_RE = re.compile(r"^\s*map\s*:\s*(\S+)", re.IGNORECASE | re.MULTILINE)
+# CS2's `status` output has no `map:` line at all (unlike CS:GO/CS:S) --
+# confirmed live. The only place the current map name shows up is the
+# first spawngroup entry, e.g.
+# "loaded spawngroup(  1)  : SV:  [1: de_nuke | main lump | mapload]".
+_MAP_RE = re.compile(r"spawngroup\(\s*1\)\s*:\s*SV:\s*\[1:\s*([^|]+?)\s*\|", re.IGNORECASE)
 _PLAYERS_RE = re.compile(
     r"players\s*:\s*(\d+)\s+humans?,\s*(\d+)\s+bots?\s*\((\d+)(?:\s*/\s*\d+)?\s*max\)",
     re.IGNORECASE,
@@ -79,13 +83,13 @@ def restart_round() -> tuple[bool, str]:
 
 def _query_cvar(name: str) -> str | None:
     """Read a cvar's current value by sending its bare name as an RCON
-    command -- the Source engine console prints `"name" = "value" ...` for
-    any cvar queried this way, same as typing it at the server console."""
+    command. CS2 prints `name = value ...` (no quotes around either side,
+    confirmed live -- unlike classic Source engine's `"name" = "value"`)."""
     try:
         response = rcon.exec_command("127.0.0.1", config.forward_port, RCON_PASSWORD, name)
     except (rcon.RconError, OSError):
         return None
-    match = re.search(rf'"{re.escape(name)}"\s*=\s*"(-?\d+)"', response)
+    match = re.search(rf'{re.escape(name)}\s*=\s*"?(-?\d+)"?', response)
     return match.group(1) if match else None
 
 
