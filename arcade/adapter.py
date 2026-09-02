@@ -60,12 +60,11 @@ ECONOMY_PRESETS = {
 }
 
 # Installed maps confirmed live via `maps *`, split by which mode family
-# they're built for -- excludes vanity/night reskins, prefabs, UI scenes,
-# and cs_italy/cs_office (hostage maps, a third pool not wired up yet).
-# A defusal map has no arms-race weapon-progression spawns and vice versa;
-# mixing them isn't a crash (learned live: an unsupported map/mode pairing
-# just gives wrong spawns/rules), but it's still wrong, so change_map
-# validates map against whichever mode applies.
+# they're built for -- excludes vanity/night reskins, prefabs, and UI
+# scenes. A defusal map has no arms-race weapon-progression spawns and
+# vice versa; mixing them isn't a crash (learned live: an unsupported
+# map/mode pairing just gives wrong spawns/rules), but it's still wrong,
+# so change_map validates map against whichever mode applies.
 _DEFUSAL_MAPS = [
     "de_ancient",
     "de_anubis",
@@ -83,14 +82,20 @@ _DEFUSAL_MAPS = [
     "de_vertigo",
 ]
 _ARMS_RACE_MAPS = ["ar_baggage", "ar_pool_day", "ar_shoots"]
+# Hostage-rescue maps. Valid alongside defusal maps in Casual/Competitive
+# (Classic is a single game_type covering both objective types), but not
+# in Wingman -- official Wingman map pools have always been defusal-only.
+# Not live-verified via an actual changelevel (unlike the defusal/arms-race
+# pools) -- worth confirming next time the server's up.
+_HOSTAGE_MAPS = ["cs_italy", "cs_office", "cs_shelter"]
 
 # name -> (game_type, game_mode, compatible maps). "arms_race" is CS2's
 # official name for what's colloquially "Gun Game" (game_type 1, game_mode
 # 0). Demolition/Deathmatch (game_type 1, game_mode 1/2) share arms_race's
 # map pool convention-wise but aren't wired up as switchable modes yet.
 MODES = {
-    "casual": (0, 0, _DEFUSAL_MAPS),
-    "competitive": (0, 1, _DEFUSAL_MAPS),
+    "casual": (0, 0, _DEFUSAL_MAPS + _HOSTAGE_MAPS),
+    "competitive": (0, 1, _DEFUSAL_MAPS + _HOSTAGE_MAPS),
     "wingman": (0, 2, _DEFUSAL_MAPS),
     "arms_race": (1, 0, _ARMS_RACE_MAPS),
 }
