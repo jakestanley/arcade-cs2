@@ -2,23 +2,23 @@ when:
   - event: cron
     cron: every-six-hours
     branch: main
-  - event: manual
-    branch: main
 
+# No event: manual here on purpose -- ci.yaml also matches event: manual and
+# also builds+deploys arcade-adapter, so a generic manual pipeline trigger
+# would run both workflows in parallel (multiple .woodpecker/*.yaml files
+# share one pipeline, with no ordering by default), racing two builds
+# against the same container. Confirmed live: this redeployed stale adapter
+# code because the older-commit build happened to finish second.
+# depends_on would fix the ordering, but its optional: true form (needed so
+# the dependency isn't enforced on a cron-only run, where "ci" isn't part of
+# the pipeline at all) requires Woodpecker v3.15+; this instance runs
+# v3.12.0. Until that's upgraded, on-demand refresh goes through triggering
+# the "every-six-hours" cron directly from the repo's Cron tab -- that only
+# matches this file, so it never races ci.yaml at all.
+#
 # Pin to the Docker-backed agent -- see ci.yaml for why this matters.
 labels:
   backend: docker
-
-# ci.yaml also matches event: manual and also builds+deploys arcade-adapter --
-# without this, a manual trigger runs both workflows in parallel (multiple
-# .woodpecker/*.yaml files share one pipeline, with no ordering by default),
-# racing two builds against the same container. Confirmed live: a manual
-# trigger redeployed stale adapter code because the older-commit build
-# happened to finish second. optional: true because "ci" isn't part of the
-# pipeline at all for a cron-triggered run (ci.yaml has no event: cron).
-depends_on:
-  - name: ci
-    optional: true
 
 steps:
   - name: refresh
