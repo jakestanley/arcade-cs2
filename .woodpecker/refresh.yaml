@@ -9,6 +9,17 @@ when:
 labels:
   backend: docker
 
+# ci.yaml also matches event: manual and also builds+deploys arcade-adapter --
+# without this, a manual trigger runs both workflows in parallel (multiple
+# .woodpecker/*.yaml files share one pipeline, with no ordering by default),
+# racing two builds against the same container. Confirmed live: a manual
+# trigger redeployed stale adapter code because the older-commit build
+# happened to finish second. optional: true because "ci" isn't part of the
+# pipeline at all for a cron-triggered run (ci.yaml has no event: cron).
+depends_on:
+  - name: ci
+    optional: true
+
 steps:
   - name: refresh
     image: docker:27-cli
