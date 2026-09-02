@@ -59,6 +59,37 @@ ECONOMY_PRESETS = {
     },
 }
 
+# Bomb-defusal modes only (game_type 0) -- name -> (game_type, game_mode).
+# Arms Race/Demolition/Deathmatch (game_type 1) use an entirely different
+# map pool and aren't in scope for change_map yet.
+DEFUSAL_MODES = {
+    "casual": (0, 0),
+    "competitive": (0, 1),
+    "wingman": (0, 2),
+}
+
+# Installed maps confirmed live via `maps *` that are actual bomb-defusal
+# maps -- excludes vanity/night reskins, prefabs, UI scenes, and other
+# game types' maps (ar_*, cs_italy/cs_office are hostage maps), all of
+# which also show up in that raw listing but aren't safe changelevel
+# targets for this mode family.
+DEFUSAL_MAPS = [
+    "de_ancient",
+    "de_anubis",
+    "de_boulder",
+    "de_cache",
+    "de_dust2",
+    "de_eldorado",
+    "de_fachwerk",
+    "de_inferno",
+    "de_mirage",
+    "de_nuke",
+    "de_overpass",
+    "de_poseidon",
+    "de_train",
+    "de_vertigo",
+]
+
 # CS2's `status` output has no `map:` line at all (unlike CS:GO/CS:S) --
 # confirmed live. The only place the current map name shows up is the
 # first spawngroup entry, e.g.
@@ -70,15 +101,43 @@ _PLAYERS_RE = re.compile(
 )
 
 
-def restart_round() -> tuple[bool, str]:
+def _rcon(command: str, ok_message: str) -> tuple[bool, str]:
     # RCON listens on the same port as the game itself (confirmed live) --
     # the adapter can reach it directly since it also runs network_mode:
     # host, same as cs2's published port.
     try:
-        rcon.exec_command("127.0.0.1", config.forward_port, RCON_PASSWORD, "mp_restartgame 1")
+        rcon.exec_command("127.0.0.1", config.forward_port, RCON_PASSWORD, command)
     except (rcon.RconError, OSError) as exc:
         return False, str(exc)
-    return True, "restarting"
+    return True, ok_message
+
+
+def restart_round() -> tuple[bool, str]:
+    return _rcon("mp_restartgame 1", "restarting")
+
+
+def pause_match() -> tuple[bool, str]:
+    # Confirmed live: queues cleanly even mid-warmup and takes effect once
+    # the match actually goes live.
+    return _rcon("mp_pause_match", "paused")
+
+
+def unpause_match() -> tuple[bool, str]:
+    return _rcon("mp_unpause_match", "unpaused")
+
+
+def end_warmup() -> tuple[bool, str]:
+    return _rcon("mp_warmup_end", "warmup ended")
+
+
+def set_bot_quota(body: dict) -> tuple[bool, str]:
+    try:
+        count = int(body.get("count"))
+    except (TypeError, ValueError):
+        return False, f"invalid bot count: {body.get('count')!r}"
+    if not 0 <= count <= 10:
+        return False, f"bot count out of range (0-10): {count}"
+    return _rcon(f"bot_quota {count}", f"bot_quota set to {count}")
 
 
 def _query_cvar(name: str) -> str | None:
@@ -133,11 +192,44 @@ def apply_preset(body: dict) -> tuple[bool, str]:
     return True, f"applied {preset}"
 
 
+def change_map(body: dict) -> tuple[bool, str]:
+    target_map = body.get("map")
+    if target_map not in DEFUSAL_MAPS:
+        return False, f"unknown map: {target_map}"
+
+    mode = body.get("mode") or None
+    if mode is not None and mode not in DEFUSAL_MODES:
+        return False, f"unknown mode: {mode}"
+
+    try:
+        if mode is not None:
+            # Set before changelevel, not after -- confirmed live that CS2
+            # applies the matching gamemode_*.cfg at map-load time, not
+            # immediately on a bare cvar change with the map already
+            # running.
+            game_type, game_mode = DEFUSAL_MODES[mode]
+            rcon.exec_command(
+                "127.0.0.1", config.forward_port, RCON_PASSWORD, f"game_type {game_type}"
+            )
+            rcon.exec_command(
+                "127.0.0.1", config.forward_port, RCON_PASSWORD, f"game_mode {game_mode}"
+            )
+        rcon.exec_command(
+            "127.0.0.1", config.forward_port, RCON_PASSWORD, f"changelevel {target_map}"
+        )
+    except (rcon.RconError, OSError) as exc:
+        return False, str(exc)
+    return True, f"changing to {target_map}" + (f" ({mode})" if mode else "")
+
+
 if __name__ == "__main__":
     run_adapter(
         config,
         extra_actions={
             "restart_round": restart_round,
+            "pause_match": pause_match,
+            "unpause_match": unpause_match,
+            "end_warmup": end_warmup,
             "apply_preset": {
                 "handler": apply_preset,
                 "label": "Apply economy preset",
@@ -148,6 +240,39 @@ if __name__ == "__main__":
                         "label": "Preset",
                         "options": ["casual", "competitive"],
                         "default": "casual",
+                    }
+                ],
+            },
+            "change_map": {
+                "handler": change_map,
+                "label": "Change map",
+                "params": [
+                    {
+                        "name": "map",
+                        "type": "enum",
+                        "label": "Map",
+                        "options": DEFUSAL_MAPS,
+                        "default": "de_nuke",
+                    },
+                    {
+                        "name": "mode",
+                        "type": "enum",
+                        "label": "Mode (leave unset to keep current)",
+                        "options": list(DEFUSAL_MODES),
+                    },
+                ],
+            },
+            "set_bot_quota": {
+                "handler": set_bot_quota,
+                "label": "Set bot quota",
+                "params": [
+                    {
+                        "name": "count",
+                        "type": "number",
+                        "label": "Bot count",
+                        "min": 0,
+                        "max": 10,
+                        "default": 4,
                     }
                 ],
             },
