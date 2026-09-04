@@ -5,13 +5,15 @@ Dockerized CS2 (Wingman) dedicated server using
 [arcade.stanley.arpa](https://github.com/jakestanley/homelab-arcade) control adapter — see
 [`arcade/README.md`](arcade/README.md) for that half.
 
-## Deployment model — this repo has no interactive checkout
+## Deployment model — dev checkout and deploy source are different things
 
-Unlike `arcade-palworld`/`arcade-minecraft`, nothing here is meant to live on disk as a
-human-managed clone with a `./scripts/up.sh` to run by hand. Every deploy — including the
-very first one — is CI pushing to `main`. Think of the host the way you'd think about a
-managed container platform: it's just compute Woodpecker happens to run on, not something
-you `cd` into and maintain.
+A persistent checkout of this repo (for reading/editing/committing — the normal
+`~/git/github.com/jakestanley/arcade-cs2` convention) is fine to have and normal to work
+from. What it is *not* is a deploy source: unlike `arcade-palworld`/`arcade-minecraft`,
+there's no `./scripts/up.sh` here to run against it, and CI never touches it. Every deploy —
+including the very first one — is CI cloning its own separate, ephemeral copy and building
+from that. See `homelab-standards/PATTERNS/checkout-topology.md` for why these are kept
+deliberately separate.
 
 Concretely:
 - **`.woodpecker/ci.yaml`** — on every push to `main`: rebuilds and redeploys `arcade-adapter`
@@ -38,9 +40,10 @@ during activation, and also registers the `every-six-hours` cron `refresh.yaml` 
 Woodpecker crons are matched by name, not derived from the YAML alone, so an activation that
 skips this step leaves the cron silently never firing.
 
-**Debugging**: there's no persistent local copy of this repo to read. `docker logs`/
-`docker exec` work directly on the host same as any container. To actually read or edit the
-code, `git clone` it into a scratch directory — the same way CI itself does, every run.
+**Debugging**: `docker logs`/`docker exec` work directly on the host same as any container.
+To read or edit the code, use (or create) the standard dev checkout at
+`~/git/github.com/jakestanley/arcade-cs2` on whichever host you're working from — it's just
+never what CI actually deploys from, which clones its own separate, throwaway copy every run.
 
 ## Configuration
 
