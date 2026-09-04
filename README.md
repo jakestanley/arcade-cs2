@@ -14,18 +14,29 @@ managed container platform: it's just compute Woodpecker happens to run on, not 
 you `cd` into and maintain.
 
 Concretely:
-- **`.woodpecker/ci.yaml`** — on every push to `main`: rebuilds `arcade-adapter` (picking up
-  whatever's current on `lib-arcade`'s `main`) and brings both services up.
-- **`.woodpecker/refresh.yaml`** — every six hours: `docker compose pull` for `cs2` (picks up
-  a new `joedwards32/cs2:latest` if one exists) and a fresh rebuild of `arcade-adapter` (picks
-  up new `lib-arcade` commits), then `up -d`. Compose only actually recreates a service if
-  what it resolved changed — no manual version comparison needed.
+- **`.woodpecker/ci.yaml`** — on every push to `main`: rebuilds and redeploys `arcade-adapter`
+  only (picking up whatever's current on `lib-arcade`'s `main`).
+- **`.woodpecker/refresh.yaml`** — every six hours: the same `arcade-adapter` rebuild+redeploy,
+  so it also picks up new `lib-arcade` commits landing without a matching push to this repo.
+
+Both workflows are deliberately scoped to `arcade-adapter` only — an unscoped `docker compose
+up -d` was confirmed live to recreate every service in the project together whenever *any* one
+of them changed, which meant an adapter-only rebuild was restarting the live game for no
+reason. **Neither workflow ever brings up `cs2` itself** — checking for and applying a new
+`joedwards32/cs2` image is lib-arcade's own `update` action (see `arcade/README.md`), triggered
+from the arcade portal by a human, not CI. This means a truly fresh deploy — a new host, or CI
+rebuilt from scratch with no `cs2` container yet existing — needs one manual, one-off
+`docker compose -p arcade-cs2 up -d cs2` run directly against the host's Docker socket; CI
+alone will never create it. After that one-time bring-up, `restart: unless-stopped` plus the
+portal's start/stop/update actions own its lifecycle — no further CI involvement needed.
 
 Both workflows run on the ordinary Docker-backed Woodpecker agent (`docker compose build`/
 `up` work fine against the host's own Docker socket from inside a sandboxed step — confirmed,
 not assumed). This repo needs to be marked **trusted** in Woodpecker for its `volumes:` (the
 Docker socket mount) to actually be honored — `homelab-ci/scripts/add-repo.sh` sets this
-during activation.
+during activation, and also registers the `every-six-hours` cron `refresh.yaml` depends on —
+Woodpecker crons are matched by name, not derived from the YAML alone, so an activation that
+skips this step leaves the cron silently never firing.
 
 **Debugging**: there's no persistent local copy of this repo to read. `docker logs`/
 `docker exec` work directly on the host same as any container. To actually read or edit the
