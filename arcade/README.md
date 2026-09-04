@@ -20,10 +20,12 @@ tracking its `main` branch (see `requirements.txt`).
 Implements the standard arcade adapter contract — see homelab-arcade's
 `docs/ARCADE_CONTRACT.md` for the full spec. Summary:
 
-- `GET /arcade/info` → `{id, name, description, actions, status}`
+- `GET /arcade/info` → `{id, name, description, actions, status, update_available}`
 - `POST /arcade/actions/start` / `POST /arcade/actions/stop` → starts/stops the sibling
   `cs2` container directly (identified by its `com.docker.compose.project`/`.service`
   labels, not a hardcoded container name)
+- `POST /arcade/actions/update` → recreates the `cs2` container onto whatever
+  `joedwards32/cs2` image is currently pulled locally (see Gotchas below)
 - Registers itself with `POST {ARCADE_BASE_URL}/api/register` every
   `ARCADE_HEARTBEAT_SECONDS` (default 30s)
 
@@ -54,3 +56,16 @@ secret store, not from here — see the top-level `README.md`.
   expiry or reboot self-heals within one heartbeat interval, and once on adapter boot so a
   redeploy while the game server is already running converges to the correct forwarding state
   immediately.
+- **Image updates are CS2-mandatory, not optional**: the actual dedicated-server files live
+  inside `joedwards32/cs2:latest` itself (unlike e.g. Palworld, which fetches its game files
+  separately at container boot regardless of image vintage) -- there's no way to run a current
+  CS2 version without a current image, and Valve's own client updates aren't opt-out. CI no
+  longer touches this at all (see `.woodpecker/refresh.yaml`'s history) -- `update_available`
+  is checked automatically by lib-arcade every `ARCADE_UPDATE_CHECK_SECONDS` (default 1800s),
+  but applying it is only ever triggered by an explicit `update` action from the portal, never
+  automatically, so a bad update is caught immediately by whoever clicked it. Since this
+  process has no `docker-compose.yml` of its own (see above), `update` recreates the container
+  via the Docker SDK by copying its own existing resolved config (env/labels/host_config)
+  rather than shelling out to `docker compose up -d` -- the same technique Watchtower uses.
+  Preserves whatever run state `cs2` was already in, same rule as `stop`: an already-stopped
+  server stays stopped after updating rather than being started as a side effect.
