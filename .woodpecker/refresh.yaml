@@ -42,19 +42,32 @@ steps:
       # changes, which would restart a live game for no reason on every
       # adapter rebuild even when cs2 itself never changed.
       #
-      # cs2 is skipped entirely while stopped: an unconditional `up -d cs2`
-      # here would silently undo a deliberate stop via the arcade portal's
-      # stop action the next time this cron fires (or the next manual
-      # trigger) -- `restart: unless-stopped` in docker-compose.yml only
-      # protects against a Docker daemon/host restart, not against this
-      # job's own `up -d`. `ps -q` lists only currently-running containers
-      # for the service, so an empty result means it's intentionally down.
+      # cs2 only gets recreated (up -d) when both of these hold:
+      #   - the pull actually changed the local joedwards32/cs2:latest
+      #     image (compared by image ID, not just "pull ran" -- pull is a
+      #     no-op most cycles since the upstream image rarely moves)
+      #   - it was already running beforehand
+      # Pulling itself is always safe to run unconditionally, even while
+      # stopped -- it only refreshes the local image cache and never
+      # touches the container. Recreating is not: an unconditional
+      # `up -d cs2` would silently undo a deliberate stop via the arcade
+      # portal's stop action the next time this cron fires (or the next
+      # manual trigger) -- `restart: unless-stopped` in docker-compose.yml
+      # only protects against a Docker daemon/host restart, not against
+      # this job's own `up -d`. `ps -q` lists only currently-running
+      # containers for the service, so an empty result means it's
+      # intentionally down.
       - |
-        if [ -n "$(docker compose -p arcade-cs2 ps -q cs2)" ]; then
-          docker compose -p arcade-cs2 pull cs2
+        OLD_IMAGE_ID="$(docker image inspect joedwards32/cs2:latest --format '{{.Id}}' 2>/dev/null || true)"
+        docker compose -p arcade-cs2 pull cs2
+        NEW_IMAGE_ID="$(docker image inspect joedwards32/cs2:latest --format '{{.Id}}' 2>/dev/null || true)"
+        WAS_RUNNING="$(docker compose -p arcade-cs2 ps -q cs2)"
+        if [ -z "$WAS_RUNNING" ]; then
+          echo "cs2 is currently stopped -- leaving it stopped (pulled latest image for next start)"
+        elif [ "$OLD_IMAGE_ID" != "$NEW_IMAGE_ID" ]; then
           docker compose -p arcade-cs2 up -d cs2
         else
-          echo "cs2 is currently stopped -- leaving it stopped"
+          echo "cs2 image already up to date -- no restart needed"
         fi
       - docker compose -p arcade-cs2 build --no-cache arcade-adapter
       - docker compose -p arcade-cs2 up -d arcade-adapter
